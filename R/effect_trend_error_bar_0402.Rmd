@@ -1,0 +1,130 @@
+---
+title: "grid search"
+author: "Boyu Liu"
+date: "2/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# install.packages(c("plyr", "dplyr", "AER", "data.table", "stringr", "ivpack", "estimatr"))
+
+#========= fixing demand gap near the end of 2019 =========
+
+library(plyr)
+library(dplyr)
+library(AER)
+library(data.table)
+library(stringr)
+library(ivpack)
+library(estimatr)
+library(ggplot2)
+
+# useful tutorial https://www.princeton.edu/~otorres/Panel101R.pdf
+# books
+# - https://bookdown.org/ccolonescu/RPoE4/panel-data-models.html
+# - https://cran.r-project.org/web/packages/plm/vignettes/plmPackage.html
+
+
+```
+
+
+
+```{r}
+
+```
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+file_folder = '/Users/boyuliu/pyprojects/Joann/Joann-Thailand-Project/notebooks/datasets/new_dataset/'
+result_dir = '/Users/boyuliu/Dropbox (MIT)/Boyu-Joann/Intermediate output/outputs/final_result/'
+
+weekly_data0 = read.csv(paste(file_folder, 'regression_data_wv_cases1_extra_iv_20210318.csv', sep=""), header = TRUE)
+# # plus is future data (exchange rate, demand, etc.), minus is data from the past (historical demand, etc.)
+
+###### helper function ######
+decorate_demand_name <- function(offset) {
+  if (offset>0) {
+    demand_var <- paste('demand_shock_plus_', offset, sep='') 
+  }
+  else if (offset<0) {
+    demand_var <- paste('demand_shock_minus_', abs(offset), sep='') 
+  }
+  else {
+    demand_var <- 'demand_shock'
+  }
+  return(demand_var)
+}
+
+decorate_iv_name <- function(offset) {
+  if (offset>0) {
+    iv <- paste('ex_rate_diff_plus_', offset, sep='') 
+  }
+  else if (offset<0) {
+    iv <- paste('ex_rate_diff_minus_', abs(offset), sep='') 
+  }
+  else {
+    iv <- 'ex_rate_diff'
+  }
+  return(iv)
+}
+
+
+
+##### 4 week MA detrend CNY#####
+estimatr_mat <- matrix(NA, 6, 6)
+row_num <- 0
+for (demand_i in -1:-6) {
+  demand_var <- decorate_demand_name(demand_i)
+  row_num <- row_num + 1;
+    iv_i <- demand_i - 1;
+    if (iv_i > 8 | iv_i < -8) {
+      next
+    }
+    cat("demand index = ", demand_i, "iv index = ", iv_i, "\n") # print loop
+    # print(row_num, demand_i, iv_i) 
+    iv <- decorate_iv_name(iv_i)
+    control <- paste('perc_abuse_minus_', abs(iv_i), sep='') 
+    formula <- as.formula(paste("perc_abuse ~ ", demand_var, " + ", control, " + province - 1 | province + ", 
+                         control,  " + ",  iv, " -1", sep = ""))
+    reg_res <- iv_robust(formula, data=weekly_data0, clusters=province, diagnostics=TRUE)
+    beta <- summary(reg_res)$coefficients[1, 'Estimate']
+    lower_CI <- summary(reg_res)$coefficients[1, 'CI Lower']
+    upper_CI <- summary(reg_res)$coefficients[1, 'CI Upper']
+
+    
+    estimatr_mat[row_num, ] <- c(row_num, demand_var, iv, beta, lower_CI, upper_CI)  
+    
+}
+
+
+colnames(estimatr_mat) <- c('lag','demand var', 'iv', 'beta', 'lower.CI', 'upper.CI')
+estimatr_mat <- data.frame(estimatr_mat)
+estimatr_mat$beta = as.numeric(estimatr_mat$beta)
+estimatr_mat$lower.CI=as.numeric(estimatr_mat$lower.CI)
+estimatr_mat$upper.CI=as.numeric(estimatr_mat$upper.CI)
+estimatr_mat$lag=as.numeric(estimatr_mat$lag)
+
+p<- ggplot(estimatr_mat, aes(x=as.numeric(lag), y=100*as.numeric(beta))) + 
+  geom_line() + geom_hline(yintercept=0, linetype="dashed", color = "red") +
+  geom_point()+
+  geom_errorbar(aes(ymin=100*as.numeric(lower.CI), ymax=100*as.numeric(upper.CI)), width=.2,
+                 position=position_dodge(0.05)) 
+print(p)
+# Finished line plot
+p+labs(x="Demand shock lags (week)", y = "Effect (% abuse)")
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,101 @@
+---
+title: "grid search"
+author: "Boyu Liu"
+date: "3/1/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(plyr)
+library(dplyr)
+library(AER)
+library(data.table)
+library(stringr)
+library(ivpack)
+library(estimatr)
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+file_folder = '/Users/boyuliu/pyprojects/Joann/Joann-Thailand-Project/notebooks/datasets/new_dataset/'
+result_dir = '/Users/boyuliu/Dropbox (MIT)/Boyu-Joann/Intermediate output/outputs/grid_search/'
+
+weekly_data1 = read.csv(paste(file_folder, 'regression_data_wv_cases1_20210301.csv', sep=""), header = TRUE)
+# weekly_data2 = read.csv(paste(file_folder, 'regression_data_wv_cases2_20210131.csv', sep=""), header = TRUE)
+# weekly_data3 = read.csv(paste(file_folder, 'regression_data_wv_cases3_20210131.csv', sep=""), header = TRUE)
+# weekly_data4 = read.csv(paste(file_folder, 'regression_data_wv_cases4_20210131.csv', sep=""), header = TRUE)
+
+
+## 6m rolling window OLS
+num.regs <- 87
+timed_coeffs <- vector("list", num.regs)
+
+i = 1
+ub = 2018.28
+while (ub < 2018.53) {
+  lb = ub - 0.27
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- lm_robust(perc_abuse ~ total_demand + province, data=weekly_data1, subset=(yr_wk_float>lb & yr_wk_float<ub), clusters = province)
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  i = i + 1
+}
+
+lb = 2018.27
+ub = 2019.01
+while (lb <= 2018.52) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- lm_robust(perc_abuse ~ total_demand + province, data=weekly_data1, subset=(yr_wk_float>lb & yr_wk_float<ub), clusters = province)
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  lb = lb + 0.01
+  i = i + 1
+  Sys.sleep(0.1)
+}
+
+lb = 2019.01
+ub = lb + 0.26
+while (ub <= 2019.52) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- lm_robust(perc_abuse ~ total_demand + province, data=weekly_data1, subset=(yr_wk_float>lb & yr_wk_float<ub), clusters = province)
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  lb = lb + 0.01
+  ub = ub + 0.01
+  i = i + 1
+}
+
+
+lb = 2019.27
+ub = 2020.02
+while (ub <= 2020.10) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- lm_robust(perc_abuse ~ total_demand + province, data=weekly_data1, subset=(yr_wk_float>lb & yr_wk_float<ub), clusters = province)
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  lb = lb + 0.01
+  ub = ub + 0.01
+  i = i + 1
+}
+
+timed.df <- ldply(timed_coeffs, rbind)
+rnames = rownames(timed_coeffs[num.regs][[1]])
+timed.df[['item']] <- rep(rnames, num.regs)
+
+write.csv(timed.df, paste(result_dir, 'timed_reg_rolling_6m_ols.csv', sep=''))
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

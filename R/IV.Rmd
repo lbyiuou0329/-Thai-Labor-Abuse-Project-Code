@@ -1,0 +1,984 @@
+---
+title: "Thailand project IV"
+author: "Boyu Liu"
+date: "1/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r cars}
+library(plyr)
+library(dplyr)
+library(AER)
+library(data.table)
+library(stringr)
+library(ivpack)
+library(estimatr)
+
+
+file_folder = '/Users/boyuliu/Dropbox/Boyu-Joann/Data/regression_data/filled_zero/'
+# weekly_data = 'weekly.csv'
+# biweekly_data = 'biweekly.csv'
+# monthly_data = 'monthly.csv'
+# weekly_data = read.csv(paste(file_folder, "weekly.csv", sep=""), header = TRUE)
+# biweekly_data = read.csv(paste(file_folder, "biweekly.csv", sep=""), header = TRUE)
+# monthly_data = read.csv(paste(file_folder, "monthly.csv", sep=""), header = TRUE)
+# weekly_data_timefe = read.csv(paste(file_folder, "weekly_time_fe.csv", sep=""), header = TRUE)
+
+## important datasets
+## USD 6 lagged shocks
+weekly_data_diff = read.csv(paste(file_folder, "weekly_time_fe_diff.csv", sep=""), header = TRUE)
+## for lag 3 cluster robust SE
+weekly_data_diff_3 = read.csv(paste(file_folder, "weekly_time_fe_diff_3.csv", sep=""), header = TRUE)
+## USD ex_rate raw
+ex_rate_usd = read.csv(paste(file_folder, "usd_ex_rate.csv", sep=""), header = TRUE)
+## CNY 6 lagged shocks
+weekly_data_cny = read.csv(paste(file_folder, "cny_weekly_data.csv", sep=""), header = TRUE)
+weekly_data_cny_1 = read.csv(paste(file_folder, "cny_weekly_data_1.csv", sep=""), header = TRUE)
+weekly_data_cny_2 = read.csv(paste(file_folder, "cny_weekly_data_2.csv", sep=""), header = TRUE)
+weekly_data_cny_18 = read.csv(paste(file_folder, "cny_weekly_data_201819.csv", sep=""), header = TRUE)
+## CNY ex_rate raw
+ex_rate_cny = read.csv(paste(file_folder, "cny_ex_rate.csv", sep=""), header = TRUE)
+
+weekly_data_myr = read.csv(paste(file_folder, "myr_weekly_data.csv", sep=""), header = TRUE)
+weekly_data_dt = read.csv(paste(file_folder, "detrend_weekly_data.csv", sep=""), header = TRUE)
+weekly_data_xy_dt = read.csv(paste(file_folder, "weekly_xy_detrend.csv", sep=""), header = TRUE)
+weekly_data_all_dt = read.csv(paste(file_folder, "weekly_all_detrend.csv", sep=""), header = TRUE)
+
+weekly_data_2017 = read.csv(paste(file_folder, "weekly_2017.csv", sep=""), header = TRUE)
+weekly_data_oppo_provs = read.csv(paste(file_folder, "weekly_oppo_provs.csv", sep=""), header = TRUE)
+
+## log
+# weekly
+lw  <- ivreg(perc_abuse ~ log(total_demand+1) | ex_rate, data=weekly_data)
+summary(lw, diagnostics=TRUE)
+
+# biweekly
+lb  <- ivreg(perc_abuse ~ log(total_demand+1) | ex_rate, data=biweekly_data)
+summary(lb, diagnostics=TRUE)
+
+# monthly
+lm  <- ivreg(perc_abuse ~ log(total_demand+1) | ex_rate, data=monthly_data)
+summary(lm, diagnostics=TRUE)
+
+## no log
+# weekly
+nw  <- ivreg(perc_abuse ~ total_demand | ex_rate, data=weekly_data, x=TRUE)
+summary(nw, diagnostics=TRUE)
+cluster.robust.se(nw, weekly_data$Location)
+
+# biweekly
+nb  <- ivreg(perc_abuse ~ total_demand | ex_rate, data=biweekly_data)
+summary(nb, diagnostics=TRUE)
+
+# monthly
+nm  <- ivreg(perc_abuse ~ total_demand | ex_rate, data=monthly_data)
+summary(nm, diagnostics=TRUE)
+
+### time fe IV
+## year
+nwtfe  <- ivreg(perc_abuse ~ total_demand + as.factor(year) -1 | as.factor(year) + ex_rate -1, data=weekly_data_timefe, x=TRUE)
+summary(nwtfe, diagnostics=TRUE)
+cluster.robust.se(nwtfe, weekly_data_timefe$Location)
+## quarter
+nwtfe  <- ivreg(perc_abuse ~ total_demand + quarter -1 | quarter + ex_rate -1, data=weekly_data_timefe, x=TRUE)
+summary(nwtfe, diagnostics=TRUE)
+cluster.robust.se(nwtfe, weekly_data_timefe$Location)
+
+summary(lm(ex_rate ~ as.factor(year), data=weekly_data_timefe))
+
+### time fe OLS
+## year
+nwtfe  <- lm(perc_abuse ~ total_demand + as.factor(year) -1, data=weekly_data_timefe, x=TRUE)
+summary(nwtfe, diagnostics=TRUE)
+cluster.robust.se(nwtfe, weekly_data_timefe$Location)
+## quarter
+nwtfe  <- lm(perc_abuse ~ total_demand + quarter -1, data=weekly_data_timefe, x=TRUE)
+summary(nwtfe, diagnostics=TRUE)
+cluster.robust.se(nwtfe, weekly_data_timefe$Location)
+## month
+nwtfe  <- lm(perc_abuse ~ total_demand + month -1, data=weekly_data_timefe, x=TRUE)
+summary(nwtfe, diagnostics=TRUE)
+cluster.robust.se(nwtfe, weekly_data_timefe$Location)
+
+### time and location fe OLS
+## year
+nwtfe  <- lm(perc_abuse ~ total_demand + as.factor(year) + Location -1, data=weekly_data_timefe, x=TRUE)
+summary(nwtfe, diagnostics=TRUE)
+cluster.robust.se(nwtfe, weekly_data_timefe$Location)
+## quarter
+nwtfe  <- lm(perc_abuse ~ total_demand + quarter + Location -1, data=weekly_data_timefe, x=TRUE)
+summary(nwtfe, diagnostics=TRUE)
+cluster.robust.se(nwtfe, weekly_data_timefe$Location)
+## month
+nwtfe  <- lm(perc_abuse ~ total_demand + month + Location -1, data=weekly_data_timefe, x=TRUE)
+summary(nwtfe, diagnostics=TRUE)
+cluster.robust.se(nwtfe, weekly_data_timefe$Location)
+
+
+### province fixed effect
+## log
+# weekly
+lwfe  <- ivreg(perc_abuse ~ log(total_demand+1) + Location -1 | Location + ex_rate -1, data=weekly_data)
+summary(lwfe, diagnostics=TRUE)
+
+# biweekly
+lbfe  <- ivreg(perc_abuse ~ log(total_demand+1) + Location | Location + ex_rate, data=biweekly_data)
+summary(lbfe, diagnostics=TRUE)
+
+# monthly
+lmfe  <- ivreg(perc_abuse ~ log(total_demand+1) + Location | Location + ex_rate, data=monthly_data)
+summary(lmfe, diagnostics=TRUE)
+
+## no log
+# weekly
+nwfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_data)
+summary(nwfe, diagnostics=TRUE)
+
+# weekly no intercept
+nwfe.1  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + ex_rate -1, data=weekly_data, x=TRUE)
+summary(nwfe.1, diagnostics=TRUE)
+anderson.rubin.ci(nwfe.1)
+cluster.robust.se(nwfe.1, weekly_data$Location)
+
+# first difference IV
+nwfe.2  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + diff_ex_rate -1, data=weekly_data_diff, x=TRUE)
+summary(nwfe.2, diagnostics=TRUE)
+#anderson.rubin.ci(nwfe.2)
+cluster.robust.se(nwfe.2, weekly_data$Location)
+
+# detrended IV
+nwfe.2.1  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + dt_ex_rate -1, data=weekly_data_dt, x=TRUE)
+summary(nwfe.2.1, diagnostics=TRUE)
+#anderson.rubin.ci(nwfe.2)
+cluster.robust.se(nwfe.2.1, weekly_data$Location)
+
+# using IV trend?
+nwfe.2.2  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + trend -1, data=weekly_data_dt, x=TRUE)
+summary(nwfe.2.2, diagnostics=TRUE)
+#anderson.rubin.ci(nwfe.2)
+cluster.robust.se(nwfe.2.2, weekly_data$Location)
+
+# detrend both x and y
+nwfe.3.1  <- ivreg(abuse_resid ~ demand_resid + Location -1 | Location + ex_rate -1, data=weekly_data_xy_dt, x=TRUE)
+summary(nwfe.3.1, diagnostics=TRUE)
+cluster.robust.se(nwfe.3.1, weekly_data_xy_dt$Location)
+
+nwfe.3.1  <- lm(abuse_resid ~ demand_resid + Location -1, data=weekly_data_xy_dt, x=TRUE)
+summary(nwfe.3.1, diagnostics=TRUE)
+
+nwfe.3.1  <- lm(perc_abuse ~ demand_resid + Location -1, data=weekly_data_xy_dt, x=TRUE)
+summary(nwfe.3.1, diagnostics=TRUE)
+
+nwfe.3.1  <- ivreg(perc_abuse ~ demand_resid + Location -1 | Location + ex_rate -1, data=weekly_data_xy_dt, x=TRUE)
+summary(nwfe.3.1, diagnostics=TRUE)
+
+nwfe.3.1  <- ivreg(abuse_resid ~ demand_resid + Location -1 | Location + dt_ex_rate -1, data=weekly_data_all_dt, x=TRUE)
+summary(nwfe.3.1, diagnostics=TRUE)
+
+# find time period w/ no trend
+nwfe.3.2  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + ex_rate -1, data=weekly_data_2017, x=TRUE)
+summary(nwfe.3.2, diagnostics=TRUE)
+cluster.robust.se(nwfe.3.2, weekly_data_2017$Location)
+
+# provinces with opposite trends
+nwfe.3.3  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + ex_rate -1, data=weekly_data_oppo_provs, x=TRUE)
+summary(nwfe.3.3, diagnostics=TRUE)
+cluster.robust.se(nwfe.3.3, weekly_data_oppo_provs$Location)
+
+# IV with first stage time FE
+nwfe.3  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + quarter + ex_rate -1, data=weekly_data_diff, x=TRUE)
+summary(nwfe.3, diagnostics=TRUE)
+cluster.robust.se(nwfe.3, weekly_data_diff$Location)
+
+nwfe.3  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + month + ex_rate -1, data=weekly_data_diff, x=TRUE)
+summary(nwfe.3, diagnostics=TRUE)
+cluster.robust.se(nwfe.3, weekly_data_diff$Location)
+
+# weekly no intercept - CNY
+nwfe.4  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + cny_ex_rate -1, data=weekly_data_cny, x=TRUE)
+summary(nwfe.4, diagnostics=TRUE)
+cluster.robust.se(nwfe.4, weekly_data$Location)
+
+## weekly no intercept - CNY 1st diff
+# bad
+nwfe.4.0  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + diff_cny_ex_rate -1, data=weekly_data_cny, x=TRUE)
+summary(nwfe.4.0, diagnostics=TRUE)
+cluster.robust.se(nwfe.4.0, weekly_data_cny$Location)
+# good
+nwfe.4.1  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + diff_cny_ex_rate_1 -1, data=weekly_data_cny_1, x=TRUE)
+summary(nwfe.4.1, diagnostics=TRUE)
+cluster.robust.se(nwfe.4.1, weekly_data_cny_1$Location)
+
+# main result in paper
+nwfe.4.1.2 <- iv_robust(perc_abuse ~ total_demand +Location-1 | diff_cny_ex_rate_1 + Location-1, clusters=Location, data=weekly_data_cny,  diagnostics=TRUE)
+summary(nwfe.4.1.2)
+write.csv(summary(nwfe.4.1.2)$coefficients, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/IV_cny_lag1.csv')
+
+# subsetting on year 2018-2019
+nwfe.4.1.6 <- iv_robust(perc_abuse ~ total_demand +Location-1 | diff_cny_ex_rate_1 + Location-1, clusters=Location, data=weekly_data_cny_18,  diagnostics=TRUE)
+summary(nwfe.4.1.6)
+
+# lagged
+nwfe.4.1.1 <- iv_robust(perc_abuse ~ total_demand + total_demand_lag_1+total_demand_lag_2 +Location-1 | diff_cny_ex_rate_1 + diff_cny_ex_rate_2+diff_cny_ex_rate_3 + Location-1, clusters=Location, data=weekly_data_cny,  diagnostics=TRUE)
+summary(nwfe.4.1.1)
+# time fe
+nwfe.4.1.3  <- iv_robust(perc_abuse ~ total_demand + Location + month -1 | Location + month + diff_cny_ex_rate_1 -1, data=weekly_data_cny, clusters=Location, diagnostics=TRUE)
+summary(nwfe.4.1.3)
+
+nwfe.4.1.4  <- iv_robust(perc_abuse ~ total_demand + Location + quarter -1 | Location + quarter + diff_cny_ex_rate_1 -1, data=weekly_data_cny, clusters=Location, diagnostics=TRUE)
+summary(nwfe.4.1.4)
+
+nwfe.4.1.5  <- iv_robust(perc_abuse ~ total_demand + Location + year -1 | Location + year + diff_cny_ex_rate_1 -1, data=weekly_data_cny, clusters=Location, diagnostics=TRUE)
+summary(nwfe.4.1.5)
+
+
+# good
+nwfe.4.2  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + diff_cny_ex_rate_2 -1, data=weekly_data_cny_2, x=TRUE)
+summary(nwfe.4.2, diagnostics=TRUE)
+cluster.robust.se(nwfe.4.2, weekly_data_cny_2$Location)
+
+nwfe.4.2.2 <- iv_robust(perc_abuse ~ total_demand +Location-1 | diff_cny_ex_rate_2 + Location-1, clusters=Location, data=weekly_data_cny,  diagnostics=TRUE)
+summary(nwfe.4.2.2)
+# lagged
+nwfe.4.2.1 <- iv_robust(perc_abuse ~ total_demand + total_demand_lag_1+total_demand_lag_2 +Location-1 | diff_cny_ex_rate_2 + diff_cny_ex_rate_3+diff_cny_ex_rate_4 + Location-1, clusters=Location, data=weekly_data_cny,  diagnostics=TRUE)
+summary(nwfe.4.2.1)
+
+# bad IV
+nwfe.4.3  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + diff_cny_ex_rate_3 -1, data=weekly_data_cny, x=TRUE)
+summary(nwfe.4.3, diagnostics=TRUE)
+cluster.robust.se(nwfe.4.3, weekly_data_cny$Location)
+#bad IV
+nwfe.4.4  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + diff_cny_ex_rate_4 -1, data=weekly_data_cny, x=TRUE)
+summary(nwfe.4.4, diagnostics=TRUE)
+cluster.robust.se(nwfe.4.4, weekly_data_cny$Location)
+
+# USD, fine not great
+nwfe.4.5  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + diff_ex_rate_1 -1, data=weekly_data_diff, x=TRUE)
+summary(nwfe.4.5, diagnostics=TRUE)
+cluster.robust.se(nwfe.4.5, weekly_data_diff$Location)
+
+# USD, fine not great
+nwfe.4.6  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + diff_ex_rate_2 -1, data=weekly_data_diff, x=TRUE)
+summary(nwfe.4.6, diagnostics=TRUE)
+cluster.robust.se(nwfe.4.6, weekly_data_diff$Location)
+# USD, great
+nwfe.4.7  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + diff_ex_rate_3 -1, data=weekly_data_diff_3, x=TRUE)
+summary(nwfe.4.7, diagnostics=TRUE)
+cluster.robust.se(nwfe.4.7, weekly_data_diff_3$Location)
+## interact IV?
+nwfe.4.7.1  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + diff_ex_rate_3*Location -1, data=weekly_data_diff, x=TRUE)
+summary(nwfe.4.7.1, diagnostics=TRUE)
+summary(lm(total_demand~Location + diff_ex_rate_3*Location -1, data=weekly_data_diff))
+summary(lm(total_demand~ diff_ex_rate_3 + Location  -1, data=weekly_data_diff))
+#summary(lm(perc_abuse~ total_demand*Location -1, data=weekly_data_diff))
+#summary(lm(perc_abuse~ total_demand + Location -1, data=weekly_data_diff))
+# time fe, bad
+nwfe.4.7.2  <- iv_robust(perc_abuse ~ total_demand + Location + month -1 | Location + month + diff_ex_rate_3 -1, data=weekly_data_diff, clusters=Location, diagnostics=TRUE)
+summary(nwfe.4.7.2)
+
+nwfe.4.7.3  <- iv_robust(perc_abuse ~ total_demand + Location + quarter -1 | Location + quarter + diff_ex_rate_3 -1, data=weekly_data_diff, clusters=Location, diagnostics=TRUE)
+summary(nwfe.4.7.3)
+
+nwfe.4.7.4  <- iv_robust(perc_abuse ~ total_demand + Location + year -1 | Location + year + diff_ex_rate_3 -1, data=weekly_data_diff, clusters=Location, diagnostics=TRUE)
+summary(nwfe.4.7.4)
+
+cluster.robust.se(nwfe.4.7.2, weekly_data_diff$Location)
+nwfe.4.7.3  <- ivreg(perc_abuse ~ total_demand + Location + month -1 | Location + month + diff_ex_rate_2 -1, data=weekly_data_diff, x=TRUE)
+summary(nwfe.4.7.3, diagnostics=TRUE)
+
+## using iv_robust - same
+nwfe.4.7.4 <- iv_robust(perc_abuse ~ total_demand +Location-1 | diff_ex_rate_3 + Location-1, clusters=Location, data=weekly_data_diff,  diagnostics=TRUE)
+summary(nwfe.4.7.4)
+
+nwfe.4.7.5 <- iv_robust(perc_abuse ~ total_demand + total_demand_lag_1+total_demand_lag_2 +Location-1 | diff_ex_rate_3 + diff_ex_rate_4+diff_ex_rate_5 + Location-1, clusters=Location, data=weekly_data_diff,  diagnostics=TRUE)
+summary(nwfe.4.7.5)
+
+# USD, fine not great
+nwfe.4.8  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + diff_ex_rate_4 -1, data=weekly_data_diff, x=TRUE)
+summary(nwfe.4.8, diagnostics=TRUE)
+cluster.robust.se(nwfe.4.8, weekly_data_diff$Location)
+# USD, fine not great
+nwfe.4.9  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + diff_ex_rate_5 -1, data=weekly_data_diff, x=TRUE)
+summary(nwfe.4.9, diagnostics=TRUE)
+cluster.robust.se(nwfe.4.9, weekly_data_diff$Location)
+# USD, fine not great
+nwfe.4.10  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + diff_ex_rate_6 -1, data=weekly_data_diff, x=TRUE)
+summary(nwfe.4.10, diagnostics=TRUE)
+cluster.robust.se(nwfe.4.10, weekly_data_diff$Location)
+# USD, fine not great
+nwfe.4.11  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + diff_ex_rate -1, data=weekly_data_diff, x=TRUE)
+summary(nwfe.4.11, diagnostics=TRUE)
+cluster.robust.se(nwfe.4.11, weekly_data_diff$Location)
+
+
+
+# weekly no intercept - MYR
+nwfe.5  <- ivreg(perc_abuse ~ total_demand + Location -1 | Location + myr_ex_rate -1, data=weekly_data_myr, x=TRUE)
+summary(nwfe.5, diagnostics=TRUE)
+cluster.robust.se(nwfe.5, weekly_data$Location)
+
+# IV with time FE -> very bad!
+nwfe.6  <- ivreg(perc_abuse ~ total_demand + month + Location -1 | Location + month + ex_rate -1, data=weekly_data_diff, x=TRUE)
+summary(nwfe.6, diagnostics=TRUE)
+cluster.robust.se(nwfe.6, weekly_data_diff$Location)
+
+# biweekly
+nbfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=biweekly_data)
+summary(nbfe, diagnostics=TRUE)
+
+# monthly
+nmfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=monthly_data)
+summary(nmfe, diagnostics=TRUE)
+
+# reduced form
+# comparison
+nwfe.ols  <- lm(perc_abuse ~ total_demand + Location -1, data=weekly_data, x=TRUE)
+summary(nwfe.ols)
+cluster.robust.se(nwfe.ols, weekly_data$Location)
+write.csv(cluster.robust.se(nwfe.ols, weekly_data$Location), '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/province_intercepts_ols.csv')
+
+# weighted regression WLS
+## base
+nwfe.wls  <- lm(perc_abuse ~ total_demand + Location -1, weights=wv_count,data=weekly_data, x=TRUE)
+summary(nwfe.wls)
+cluster.robust.se(nwfe.wls, weekly_data$Location)
+## year FE
+nwyfe.wls  <- lm(perc_abuse ~ total_demand + Location + year -1, weights=wv_count,data=weekly_data_timefe, x=TRUE)
+summary(nwyfe.wls)
+cluster.robust.se(nwyfe.wls, weekly_data_timefe$Location)
+## quarter FE
+nwqfe.wls  <- lm(perc_abuse ~ total_demand + Location + quarter -1, weights=wv_count,data=weekly_data_timefe, x=TRUE)
+summary(nwqfe.wls)
+cluster.robust.se(nwqfe.wls, weekly_data_timefe$Location)
+## month FE
+nwmfe.wls  <- lm(perc_abuse ~ total_demand + Location + month -1, weights=wv_count,data=weekly_data_timefe, x=TRUE)
+summary(nwmfe.wls)
+cluster.robust.se(nwmfe.wls, weekly_data_timefe$Location)
+
+
+nw.ols  <- lm(perc_abuse ~ total_demand, data=weekly_data, x=TRUE)
+summary(nw.ols)
+cluster.robust.se(nw.ols, weekly_data$Location)
+
+nw.ols  <- lm(perc_abuse ~ total_demand + month -1, data=weekly_data_timefe, x=TRUE)
+cluster.robust.se(nw.ols, weekly_data_timefe$Location)
+
+## with lags
+nw.ols  <- lm(perc_abuse ~ total_demand+total_demand_lag_m1+total_demand_lag_m2+total_demand_lag_m3+total_demand_lag_m4+total_demand_lag_1+total_demand_lag_2+total_demand_lag_3+total_demand_lag_4, data=weekly_data_timefe, x=TRUE)
+cluster.robust.se(nw.ols, weekly_data_timefe$Location)
+summary(nw.ols)
+
+nw.ols  <- lm(perc_abuse ~ total_demand+total_demand_lag_m1+total_demand_lag_m2+total_demand_lag_m3+total_demand_lag_m4+total_demand_lag_1+total_demand_lag_2+total_demand_lag_3+total_demand_lag_4 + Location -1, data=weekly_data_timefe, x=TRUE)
+cluster.robust.se(nw.ols, weekly_data_timefe$Location)
+
+nw.ols  <- lm(perc_abuse ~ total_demand +total_demand_lag_m1+total_demand_lag_m2+total_demand_lag_m3+total_demand_lag_m4+total_demand_lag_1+total_demand_lag_2+total_demand_lag_3+total_demand_lag_4 + month -1, data=weekly_data_timefe, x=TRUE)
+cluster.robust.se(nw.ols, weekly_data_timefe$Location)
+
+nw.ols  <- lm(perc_abuse ~ total_demand +total_demand_lag_m1+total_demand_lag_m2+total_demand_lag_m3+total_demand_lag_m4+total_demand_lag_1+total_demand_lag_2+total_demand_lag_3+total_demand_lag_4 + month + Location -1, data=weekly_data_timefe, x=TRUE)
+cluster.robust.se(nw.ols, weekly_data_timefe$Location)
+
+# weekly
+wiv <- lm(perc_abuse ~ ex_rate, data=weekly_data) 
+summary(wiv)
+
+# biweekly
+biv <- lm(perc_abuse ~ ex_rate, data=biweekly_data) 
+summary(biv)
+
+# monthly
+miv <- lm(perc_abuse ~ ex_rate, data=monthly_data) 
+summary(miv)
+# negative slope, so cheaper Thai baht -> (more export demand) -> less abuse?
+
+# first stage
+# weekly
+wfs <- lm(total_demand ~ ex_rate, data=weekly_data) 
+summary(wfs)
+
+# biweekly
+bfs <- lm(total_demand ~ ex_rate, data=biweekly_data) 
+summary(bfs)
+
+# monthly
+mfs <- lm(total_demand ~ ex_rate, data=monthly_data) 
+summary(mfs)
+
+## iv no log weekly for each province
+locations = unique(weekly_data$Location)
+res.list = list()
+#i = 1
+for (loc in locations) {
+  tryCatch({
+    res = summary(ivreg(perc_abuse ~ total_demand | ex_rate, data=weekly_data, subset=(Location==loc)))
+    res.list[[loc]] <- res$coefficients
+  }, error=function(e){print(loc)}) 
+}
+
+reg.data <- ldply(res.list, rbind)
+reg.data[['item']] = rep(c('intercept', 'total_demand'), length(res.list))
+
+write.csv(reg.data, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/iv_by_prov.csv')
+
+## exchange rate impact for each province
+locations = unique(weekly_data$Location)
+p.list = list()
+coef.list = list()
+
+for (loc in locations) {
+  res = summary(lm(total_demand ~ ex_rate, data=weekly_data, subset=(Location==loc)))
+  coef.list[loc] <- res$coefficients[2]
+  p.list[loc] <- res$coefficients[8]
+  
+}
+
+reg.data <- dplyr::bind_rows(coef.list, p.list)
+reg.data <- transpose(reg.data)
+rownames(reg.data) <- locations
+colnames(reg.data) <- list('coeff', 'p-value')
+write.csv(reg.data, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/ex_demand_by_prov.csv')
+
+## IV with industry
+industry_data_file <- paste(file_folder, "weekly_w_ind.csv", sep="")
+industry_data = read.csv(industry_data_file, header = TRUE)
+industries = list('Agriculture and Livestock', 'Construction', 'Food and Beverage',
+                  'Manufacturing', 'Natural Resources', 'Packaging', 'Seafood',
+                  'Services', 'Waste Management and Recycling')
+industries <- str_replace_all(industries, ' ', '.')
+formula1 = as.formula(paste("total_demand ~ ex_rate + ", paste(industries, collapse=" + "), sep = ""))
+# first stage
+ind_res <- lm(formula1, data=industry_data)
+summary(ind_res) # reverses sign
+
+# iv with both location and industry control
+industries_str <- paste(industries, collapse=" + ")
+formula2 <- as.formula(paste("perc_abuse ~ total_demand + Location + ", industries_str, " | Location + ", industries_str, " + ex_rate", sep = ""))
+ind_iv_res  <- ivreg(formula2, data=industry_data)
+summary(ind_iv_res, diagnostics=TRUE) # becomes insignificant
+
+# iv with only industry control
+formula3 <- as.formula(paste("perc_abuse ~ total_demand + ", industries_str, " | ", industries_str, " + ex_rate", sep = ""))
+ind_only_iv_res  <- ivreg(formula3, data=industry_data)
+summary(ind_only_iv_res, diagnostics=TRUE) # becomes insignificant
+
+## this makes a lot of sense - controlling for industry, exchange rate and demand are uncorrelated, because exchange rate affect demand through some industries having more exposure to trade. 
+# also, should not have included industry in iv anyways because it violates IV assumptions - IV strongly correlatd with industry, and industry strongly correlated with percent abuse by itself. 
+
+# summary(lm(ex_rate ~ Agriculture.and.Livestock + Construction + Food.and.Beverage + Manufacturing + Natural.Resources + Packaging + Seafood + Services + Waste.Management.and.Recycling, data=industry_data))
+# summary(lm(perc_abuse ~ Agriculture.and.Livestock + Construction + Food.and.Beverage + Manufacturing + Natural.Resources + Packaging + Seafood + Services + Waste.Management.and.Recycling, data=industry_data))
+
+
+
+# Cragg-Donald test for nwfe (no log, weekly, province fixed effect)
+# https://bookdown.org/ccolonescu/RPoE4/random-regressors.html
+G<-length(locations); L<-1; N<-nrow(weekly_data); B<-1
+X <- resid(lm(total_demand~Location, data=weekly_data))
+Y <-resid(lm(ex_rate~Location, data=weekly_data))
+rB <- cancor(X,Y)$cor
+CraggDonaldF <- ((N-G-B)/L)/((1-rB^2)/rB^2) # 68.21272
+# above the critical value http://mayoral.iae-csic.org/IV_2015/stock_yogo_2005.pdf
+
+# same as ivreg test...
+ols.nwfe  <- lm(perc_abuse ~ total_demand + Location, data=weekly_data)
+summary(ols.nwfe)
+write.csv(summary(ols.nwfe)$coefficients, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/for_plot/ols_nwfe.csv')
+
+summary(nwfe, diagnostics=TRUE)
+summary(lm(perc_abuse ~ total_demand + Location, data=weekly_data), diagnostics=TRUE)
+# iv result 10x bigger than OLS result
+
+# national data micro foundation
+national_data_file <- paste(file_folder, "national_data.csv", sep="")
+national_data = read.csv(national_data_file, header = TRUE)
+nat_res <- lm(formula1, data=national_data)
+summary(nat_res) # reverses sign
+
+## LATE for each province (see jupyter notebook, summary of LATE)
+write.csv(dplyr::bind_rows(nwfe$coefficients[3:54]), '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/province_intercepts.csv')
+
+write.csv(dplyr::bind_rows(nwfe.1$coefficients[3:54]), '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/province_intercepts-1.csv')
+
+# time step regression
+weekly_timestep_data = read.csv(paste(file_folder, 'time_step_regression.csv', sep=""), header = TRUE)
+lower.bounds <- list(2017.00, 2017.13, 2017.26, 2017.39, 2018.00, 2018.13, 2018.26, 2018.39, 2019.00, 2019.13)
+upper.bounds <- list(2017.27, 2017.40, 2018.01, 2018.14, 2018.27, 2018.40, 2019.01, 2019.14, 2019.27, 2019.42)
+timed_coeffs <- vector("list", 10)
+timed_pvals <- vector("list", 10)
+
+for (i in 1:10) {
+  lower.b <- lower.bounds[i][[1]]
+  upper.b <- upper.bounds[i][[1]]
+  time_nwfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>lower.b & yr_wk_float<upper.b))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+}
+
+timed.df <- ldply(timed_coeffs, rbind)
+rnames = rownames(timed_coeffs[10][[1]])
+timed.df[['item']] <- rep(rnames, 10)
+
+write.csv(timed.df, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/timed_reg_6m.csv')
+
+## 6m rolling window
+num.regs <- 120
+timed_coeffs <- vector("list", num.regs)
+
+i = 1
+ub = 2017.27
+while (ub < 2017.53) {
+  lb = ub - 0.27
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  i = i + 1
+}
+
+lb = 2017.27
+ub = 2018.02
+while (lb < 2017.52) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  lb = lb + 0.01
+  i = i + 1
+  Sys.sleep(0.1)
+}
+
+lb = 2018.01
+ub = lb + 0.27
+while (ub <= 2018.53) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  lb = lb + 0.01
+  ub = lb + 0.27
+  i = i + 1
+}
+
+
+lb = 2018.27
+ub = 2019.02
+while (lb <= 2018.52) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  lb = lb + 0.01
+  ub = ub + 0.01
+  i = i + 1
+}
+
+lb = 2019.01
+ub = lb + 0.27
+while (ub <= 2019.42) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  lb = lb + 0.01
+  ub = ub + 0.01
+  i = i + 1
+}
+
+timed.df <- ldply(timed_coeffs, rbind)
+rnames = rownames(timed_coeffs[num.regs][[1]])
+timed.df[['item']] <- rep(rnames, num.regs)
+
+write.csv(timed.df, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/timed_reg_rolling.csv')
+
+## 1y rolling window
+num.regs <- 94
+timed_coeffs <- vector("list", num.regs)
+
+i = 1
+lb = 2017.005
+ub = 2018.005
+while (ub < 2018.53) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  lb = lb + 0.01
+  i = i + 1
+}
+
+lb = 2018.015
+ub = 2019.015
+while (ub < 2019.42) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  lb = lb + 0.01
+  i = i + 1
+  Sys.sleep(0.1)
+}
+
+timed.df <- ldply(timed_coeffs, rbind)
+rnames = rownames(timed_coeffs[num.regs][[1]])
+timed.df[['item']] <- rep(rnames, num.regs)
+
+write.csv(timed.df, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/timed_reg_rolling_1yr.csv')
+
+
+## 1.5y rolling window
+num.regs <- 68
+timed_coeffs <- vector("list", num.regs)
+
+i = 1
+lb = 2017.005
+ub = 2018.265
+while (ub < 2018.53) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  lb = lb + 0.01
+  i = i + 1
+}
+
+lb = 2017.275
+ub = 2019.015
+while (lb < 2017.53) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  lb = lb + 0.01
+  i = i + 1
+}
+
+lb = 2018.015
+ub = 2019.275
+while (ub < 2019.42) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  lb = lb + 0.01
+  i = i + 1
+}
+
+timed.df <- ldply(timed_coeffs, rbind)
+rnames = rownames(timed_coeffs[num.regs][[1]])
+timed.df[['item']] <- rep(rnames, num.regs)
+
+write.csv(timed.df, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/timed_reg_rolling_1.5yr.csv')
+
+## 2y rolling window
+num.regs <- 42
+timed_coeffs <- vector("list", num.regs)
+
+i = 1
+lb = 2017.005
+ub = 2019.005
+while (ub < 2019.42) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  lb = lb + 0.01
+  i = i + 1
+}
+
+
+timed.df <- ldply(timed_coeffs, rbind)
+rnames = rownames(timed_coeffs[num.regs][[1]])
+timed.df[['item']] <- rep(rnames, num.regs)
+
+write.csv(timed.df, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/timed_reg_rolling_2yr.csv')
+
+## 1y rolling window log IV
+num.regs <- 94
+timed_coeffs <- vector("list", num.regs)
+
+i = 1
+lb = 2017.005
+ub = 2018.005
+while (ub < 2018.53) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- ivreg(perc_abuse ~ log(total_demand+1) + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  lb = lb + 0.01
+  i = i + 1
+}
+
+lb = 2018.015
+ub = 2019.015
+while (ub < 2019.42) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- ivreg(perc_abuse ~ log(total_demand+1) + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  lb = lb + 0.01
+  i = i + 1
+}
+
+timed.df <- ldply(timed_coeffs, rbind)
+rnames = rownames(timed_coeffs[num.regs][[1]])
+timed.df[['item']] <- rep(rnames, num.regs)
+
+write.csv(timed.df, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/timed_reg_rolling_1yr_log.csv')
+
+## is subsampling done correctly? A: It is. Maybe IV efficiency is the issue.
+time_nwfe  <- ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=(yr_wk_float>2017.0 & yr_wk_float<2019.42))
+summary(time_nwfe, diagnostics = TRUE) 
+
+test.ols <- lm(perc_abuse ~ total_demand + Location, data=weekly_timestep_data, subset=(yr_wk_float>2017.0 & yr_wk_float<2019.42))
+summary(test.ols, diagnostics = TRUE) 
+
+## 1y rolling window OLS
+num.regs <- 94
+timed_coeffs <- vector("list", num.regs)
+
+i = 1
+lb = 2017.005
+ub = 2018.005
+while (ub < 2018.53) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- lm(perc_abuse ~ total_demand + Location, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  lb = lb + 0.01
+  i = i + 1
+}
+
+lb = 2018.015
+ub = 2019.015
+while (ub < 2019.42) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- lm(perc_abuse ~ total_demand + Location, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  lb = lb + 0.01
+  i = i + 1
+}
+
+timed.df <- ldply(timed_coeffs, rbind)
+rnames = rownames(timed_coeffs[num.regs][[1]])
+timed.df[['item']] <- rep(rnames, num.regs)
+
+write.csv(timed.df, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/timed_reg_rolling_1yr_ols.csv')
+
+
+## 6m rolling window OLS
+num.regs <- 120
+timed_coeffs <- vector("list", num.regs)
+
+i = 1
+ub = 2017.27
+while (ub < 2017.53) {
+  lb = ub - 0.27
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- lm(perc_abuse ~ total_demand + Location, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  i = i + 1
+}
+
+lb = 2017.27
+ub = 2018.02
+while (lb < 2017.52) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- lm(perc_abuse ~ total_demand + Location, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  ub = ub + 0.01
+  lb = lb + 0.01
+  i = i + 1
+  Sys.sleep(0.1)
+}
+
+lb = 2018.01
+ub = lb + 0.27
+while (ub <= 2018.53) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- lm(perc_abuse ~ total_demand + Location, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  lb = lb + 0.01
+  ub = lb + 0.27
+  i = i + 1
+}
+
+
+lb = 2018.27
+ub = 2019.02
+while (lb <= 2018.52) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- lm(perc_abuse ~ total_demand + Location, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  lb = lb + 0.01
+  ub = ub + 0.01
+  i = i + 1
+}
+
+lb = 2019.01
+ub = lb + 0.27
+while (ub <= 2019.42) {
+  print(paste(lb, ub, sep=','))
+  time_nwfe  <- lm(perc_abuse ~ total_demand + Location, data=weekly_timestep_data, subset=(yr_wk_float>lb & yr_wk_float<ub))
+  timed_coeffs[[i]] <- summary(time_nwfe)$coefficients
+  lb = lb + 0.01
+  ub = ub + 0.01
+  i = i + 1
+}
+
+timed.df <- ldply(timed_coeffs, rbind)
+rnames = rownames(timed_coeffs[num.regs][[1]])
+timed.df[['item']] <- rep(rnames, num.regs)
+
+write.csv(timed.df, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/timed_reg_rolling_6m_ols.csv')
+
+## OLS each province
+locations = unique(weekly_data$Location)
+coef.list = list()
+
+for (loc in locations) {
+  res = summary(lm(perc_abuse ~ total_demand, data=weekly_data, subset=(Location==loc)))
+  coef.list[[loc]] <- res$coefficients
+}
+
+reg.data <- ldply(coef.list, rbind)
+reg.data[['item']] = rep(c('intercept', 'total_demand'), length(coef.list))
+write.csv(reg.data, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/IV/diagnostics/OLS_by_prov.csv')
+
+# sensitivity - remove 3 months
+sensitivity.res = ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=((yr_wk_float>2018.26 | yr_wk_float<2018.14)))
+summary(sensitivity.res, diagnostics = TRUE)
+
+sensitivity.res2 = ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=((yr_wk_float>2018.30 | yr_wk_float<2018.04)))
+summary(sensitivity.res2, diagnostics = TRUE)
+
+sensitivity.res3 = ivreg(perc_abuse ~ total_demand + Location | Location + ex_rate, data=weekly_timestep_data, subset=((yr_wk_float>2018.60 | yr_wk_float<2018.00)))
+summary(sensitivity.res3, diagnostics = TRUE)
+
+# industry plot
+industry_str = paste(industries, collapse=" + ")
+formula4 = as.formula(paste("perc_abuse ~ ", industry_str, "-1", sep = ""))
+ind_fe = lm(formula4, data=industry_data)
+summary(ind_fe)
+write.csv(summary(ind_fe)$coefficients, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/for_plot/industry_fe.csv')
+
+formula4 = as.formula(paste("perc_abuse ~ Location + ", industry_str, "-1", sep = ""))
+ind_fe = lm(formula4, data=industry_data)
+summary(ind_fe)
+write.csv(summary(ind_fe)$coefficients, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/for_plot/industry_prov_fe.csv')
+
+formula4 = as.formula(paste("perc_abuse ~ ", industry_str, "+ Location + month -1", sep = ""))
+ind_fe = lm(formula4, data=industry_data)
+summary(ind_fe)
+write.csv(summary(ind_fe)$coefficients, '/Users/boyuliu/Dropbox/Boyu-Joann/Intermediate output/outputs/2020jan_new_data/for_plot/industry_prov_time_fe.csv')
+
+ind_fe = lm(formula4, data=industry_data, weights=wv_count)
+summary(ind_fe)
+
+formula5 = as.formula(paste("perc_abuse ~ total_demand + ", industry_str, "-1", sep = ""))
+ind_demand = lm(formula5, data=industry_data)
+summary(ind_demand)
+
+formula6 = as.formula(paste("total_demand ~ ", industry_str, "-1", sep = ""))
+demand_from_ind = lm(formula6, data=industry_data)
+summary(demand_from_ind)
+
+# industry demand data extrapolated
+folder = '/Users/boyuliu/pyprojects/Joann/Joann-Thailand-Project/data/'
+industry_extrapolated <- paste(folder, "regression_data_filled_zero_total_demand_w_industry_extrapolated.csv", sep="")
+industry_extrapolated = read.csv(industry_extrapolated, header = TRUE)
+
+# IV with FE
+formula7 = as.formula(paste("perc_abuse ~ ", industry_str, "+ Location -1 |", "Location + ex_rate -1", sep = ""))
+nwfe.2  <- ivreg(formula7, data=industry_extrapolated, x=TRUE)
+summary(nwfe.2, diagnostics=TRUE)
+anderson.rubin.ci(nwfe.2)
+cluster.robust.se(nwfe.2, industry_extrapolated$Location)
+
+# IV wo FE
+formula9 = as.formula(paste("perc_abuse ~ ", industry_str, " |", "ex_rate", sep = ""))
+nwfe.4  <- ivreg(formula9, data=industry_extrapolated, x=TRUE)
+summary(nwfe.4, diagnostics=TRUE)
+anderson.rubin.ci(nwfe.4)
+cluster.robust.se(nwfe.4, industry_extrapolated$Location)
+
+# OLS
+formula8 = as.formula(paste("perc_abuse ~ ", industry_str, "+ Location -1", sep = ""))
+nwfe.3  <- lm(formula8, data=industry_extrapolated)
+summary(nwfe.3, diagnostics=TRUE)
+
+summary(lm(Construction ~ ex_rate, data=industry_extrapolated))
+
+for (ind in industries) {
+  print(ind)
+  result = summary(lm(as.formula(paste(ind, "~ ex_rate + Location", sep='')), data=industry_extrapolated))
+  print(paste("coefficient:", result$coefficients[2], sep=''))
+  print(paste("p value:", result$coefficients[164], sep=''))
+}
+
+## IV first stage errors
+nwfe1.1 <- lm(total_demand ~ ex_rate, data=weekly_data)
+summary(nwfe1.1)
+plot(weekly_data$ex_rate, resid(nwfe1.1), ylab="Residuals", xlab="ex_rate", main="residual of first stage")
+plot(weekly_data_cny$fake_date, resid(nwfe1.1), ylab="Residuals", xlab="ex_rate", main="residual of first stage")
+abline(0, 0)
+
+nwfe1.2 <- lm(total_demand ~ ex_rate + Location, data=weekly_data)
+summary(nwfe1.2)
+plot(weekly_data$ex_rate, resid(nwfe1.2), ylab="Residuals", xlab="ex_rate", main="residual of first stage")
+abline(0, 0)
+
+# location
+nwfe1.2 <- lm(total_demand ~ ex_rate + Location -1, data=weekly_data)
+summary(nwfe1.2)
+plot(weekly_data$ex_rate, resid(nwfe1.2), ylab="Residuals", xlab="ex_rate", main="residual of first stage")
+abline(0, 0)
+
+plot(weekly_data$total_demand, resid(nwfe1.2), ylab="Residuals", xlab="demand", main="residual of first stage")
+abline(0, 0)
+
+# time
+nwfe1.3 <- lm(total_demand ~ ex_rate + month, data=weekly_data_cny)
+summary(nwfe1.3)
+plot(weekly_data$ex_rate, resid(nwfe1.3), ylab="Residuals", xlab="ex_rate", main="residual of first stage")
+abline(0, 0)
+
+# location interaction
+nwfe1.4 <- lm(total_demand ~ ex_rate*Location -1, data=weekly_data)
+summary(nwfe1.4)
+plot(weekly_data$ex_rate, resid(nwfe1.4), ylab="Residuals", xlab="ex_rate", main="residual of first stage")
+abline(0, 0)
+
+nwfe1.5 <- lm(total_demand ~ ex_rate*Location + month -1, data=weekly_data_cny)
+summary(nwfe1.5)
+plot(weekly_data$ex_rate, resid(nwfe1.5), ylab="Residuals", xlab="ex_rate", main="residual of first stage")
+abline(0, 0)
+
+plot(weekly_data$ex_rate, resid(nwfe.1), ylab="Residuals", xlab="ex_rate", main="residual of IV regression")
+abline(0, 0)
+
+plot(weekly_data$total_demand, resid(nwfe.1), ylab="Residuals", xlab="ex_rate", main="residual of IV regression")
+abline(0, 0)
+
+library(ggplot2)
+ggplot(weekly_data, aes(x=total_demand)) + geom_histogram(bins = 30)
+
+ggplot(weekly_data, aes(x=log(total_demand+1))) + geom_histogram(bins = 30)
+
+ggplot(weekly_data, aes(x=perc_abuse)) + geom_histogram(bins = 30)
+
+filtered_data = weekly_data[which(weekly_data$total_demand>0),]
+filtered_data = filtered_data[which(weekly_data$wv_count>0),]
+ggplot(filtered_data, aes(x=perc_abuse)) + geom_histogram(bins = 30)
+ggplot(filtered_data, aes(x=total_demand)) + geom_histogram(bins = 30)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

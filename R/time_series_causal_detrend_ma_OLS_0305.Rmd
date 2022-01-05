@@ -1,0 +1,443 @@
+---
+title: "grid search"
+author: "Boyu Liu"
+date: "2/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# install.packages(c("plyr", "dplyr", "AER", "data.table", "stringr", "ivpack", "estimatr"))
+
+#========= fixing demand gap near the end of 2019 =========
+
+library(plyr)
+library(dplyr)
+library(AER)
+library(data.table)
+library(stringr)
+library(ivpack)
+library(estimatr)
+
+# useful tutorial https://www.princeton.edu/~otorres/Panel101R.pdf
+# books
+# - https://bookdown.org/ccolonescu/RPoE4/panel-data-models.html
+# - https://cran.r-project.org/web/packages/plm/vignettes/plmPackage.html
+
+
+```
+
+
+
+```{r}
+# test plotting to see heterogeneity 
+library(foreign)
+Panel <- read.dta("http://dss.princeton.edu/training/Panel101.dta")
+library(gplots)
+plotmeans(y ~ country, main="Heterogeineity across countries", data=Panel)
+plotmeans(perc_abuse ~ province, main="Heterogeineity across provinces", data=weekly_data1)
+plotmeans(perc_abuse ~ year_week, main="Heterogeineity across provinces", data=weekly_data1)
+detach("package:foreign")
+detach("package:gplots")
+```
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+file_folder = '/Users/boyuliu/pyprojects/Joann/Joann-Thailand-Project/notebooks/datasets/new_dataset/'
+result_dir = '/Users/boyuliu/Dropbox (MIT)/Boyu-Joann/Intermediate output/outputs/grid_search/'
+
+weekly_data0 = read.csv(paste(file_folder, 'regression_data_wv_cases1_causal_ma_detrend_20210301.csv', sep=""), header = TRUE)
+weekly_data1 = read.csv(paste(file_folder, 'regression_data_wv_cases1_causal_ma_detrend_8w_20210301.csv', sep=""), header = TRUE)
+weekly_data2 = read.csv(paste(file_folder, 'regression_data_wv_cases1_causal_ma_detrend_12w_20210301.csv', sep=""), header = TRUE)
+# weekly_data3 = read.csv(paste(file_folder, 'regression_data_wv_cases1_causal_ma_detrend_8w_std_20210217.csv', sep=""), header = TRUE)
+# weekly_data2 = read.csv(paste(file_folder, 'regression_data_wv_cases2_20210131.csv', sep=""), header = TRUE)
+# weekly_data3 = read.csv(paste(file_folder, 'regression_data_wv_cases3_20210131.csv', sep=""), header = TRUE)
+# weekly_data4 = read.csv(paste(file_folder, 'regression_data_wv_cases4_20210131.csv', sep=""), header = TRUE)
+
+# # plus is future data (exchange rate, demand, etc.), minus is data from the past (historical demand, etc.)
+
+###### helper function ######
+decorate_demand_name <- function(offset) {
+  if (offset>0) {
+    demand_var <- paste('demand_shock_plus_', offset, sep='') 
+  }
+  else if (offset<0) {
+    demand_var <- paste('demand_shock_minus_', abs(offset), sep='') 
+  }
+  else {
+    demand_var <- 'demand_shock'
+  }
+  return(demand_var)
+}
+
+decorate_iv_name <- function(offset) {
+  if (offset>0) {
+    iv <- paste('ex_rate_diff_plus_', offset, sep='') 
+  }
+  else if (offset<0) {
+    iv <- paste('ex_rate_diff_minus_', abs(offset), sep='') 
+  }
+  else {
+    iv <- 'ex_rate_diff'
+  }
+  return(iv)
+}
+
+summary(lm_robust(demand_shock_plus_1 ~ ex_rate_diff, data=weekly_data0, clusters=province))
+summary(lm_robust(demand_shock_minus_1 ~ ex_rate_diff_minus_2, data=weekly_data0, clusters=province))
+summary(lm_robust(perc_abuse ~ ex_rate_diff, data=weekly_data0, clusters=province))
+summary(lm_robust(perc_abuse ~ ex_rate_diff_minus_1, data=weekly_data0, clusters=province))
+summary(lm_robust(perc_abuse ~ ex_rate_diff_minus_2, data=weekly_data0, clusters=province))
+summary(lm_robust(perc_abuse ~ ex_rate_diff_minus_3 + province, data=weekly_data0, clusters=province))
+summary(lm_robust(perc_abuse ~ ex_rate_diff_minus_4 + province, data=weekly_data0, clusters=province))
+
+summary(lm_robust(perc_abuse ~ demand_shock_plus_1, data=weekly_data0, clusters=province))
+
+formula <- as.formula(paste("perc_abuse ~ demand_shock_minus_2 + province + lag(perc_abuse, 3) - 1 | province+ lag(perc_abuse, 3)  + ex_rate_diff_minus_3 -1", sep = ""))
+reg_res <- iv_robust(formula, data=weekly_data0, clusters=province, diagnostics=TRUE)
+summary(reg_res)
+
+formula <- as.formula(paste("perc_abuse ~ demand_shock_minus_2 + province - 1 | province+ lag(perc_abuse, 3)  + ex_rate_diff_minus_3 -1", sep = ""))
+reg_res <- iv_robust(formula, data=weekly_data0, clusters=province, diagnostics=TRUE)
+summary(reg_res)
+
+##### 4 week MA detrend OLS #####
+summary(lm_robust(perc_abuse ~ demand_shock + province -1, data=weekly_data0, clusters=province))$coefficients['demand_shock',] # positive
+
+summary(lm_robust(perc_abuse ~ demand_shock + province + year_week -1, data=weekly_data0, clusters=province))$coefficients['demand_shock',] # positive
+
+summary(lm_robust(perc_abuse ~ demand_shock + province + month -1, data=weekly_data0, clusters=province))$coefficients['demand_shock',] # positive
+
+summary(lm_robust(perc_abuse ~ demand_shock + province + quarter -1, data=weekly_data0, clusters=province))$coefficients['demand_shock',] # positive
+
+summary(lm_robust(perc_abuse ~ demand_shock_minus_1 + province + year_week -1, data=weekly_data0, clusters=province))$coefficients['demand_shock_minus_1',] # negative
+
+summary(lm_robust(perc_abuse ~ demand_shock_minus_2 + province + year_week -1, data=weekly_data0, clusters=province))$coefficients['demand_shock_minus_2',] # negative
+
+summary(lm_robust(perc_abuse ~ demand_shock_minus_3 + province + year_week -1, data=weekly_data0, clusters=province))$coefficients['demand_shock_minus_3',]
+
+## 4 week
+summary(lm_robust(perc_abuse ~ demand_shock_minus_4 + province + year_week -1, data=weekly_data0, clusters=province))$coefficients['demand_shock_minus_4',]
+
+summary(lm_robust(perc_abuse ~ demand_shock_minus_4 + province + quarter -1, data=weekly_data0, clusters=province))$coefficients['demand_shock_minus_4',]
+
+summary(lm_robust(perc_abuse ~ demand_shock_minus_4 + province + month -1, data=weekly_data0, clusters=province))$coefficients['demand_shock_minus_4',]
+
+summary(lm_robust(perc_abuse ~ demand_shock_minus_4 + province -1, data=weekly_data0, clusters=province))$coefficients['demand_shock_minus_4',]
+
+
+
+##### 4 week MA detrend | abuse #####
+summary(lm_robust(perc_abuse ~ demand_shock_minus_2 + lag(perc_abuse, 2) + province + year_week -1, data=weekly_data0, clusters=province))$coefficients['demand_shock_minus_2',]
+
+estimatr_mat <- matrix(NA, 140, 6)
+
+row_num <- 0
+for (demand_i in -7:0) {
+  demand_var <- decorate_demand_name(demand_i)
+  
+  for (iv_i in -4:0) {
+    iv_i <- iv_i + demand_i;
+    if (iv_i > 8 | iv_i < -8) {
+      next
+    }
+    row_num <- row_num + 1;
+    cat("row number = ", row_num, "demand index = ", demand_i, "iv index = ", iv_i, "\n") # print loop
+    # print(row_num, demand_i, iv_i) 
+    iv <- decorate_iv_name(iv_i)
+    
+    formula <- as.formula(paste("perc_abuse ~ ", demand_var, " + province + lag(perc_abuse, ) - 1 | province + ", 
+                           " + ",  iv, " -1", sep = ""))
+    reg_res <- iv_robust(formula, data=weekly_data0, clusters=province, diagnostics=TRUE)
+    first_stage_p <- reg_res$diagnostic_first_stage_fstatistic['p.value']
+    endo_test_p <- reg_res$diagnostic_endogeneity_test['p.value']
+    beta <- summary(reg_res)$coefficients[1, 1]
+    beta_p <- summary(reg_res)$coefficients[1, 4]
+    
+    estimatr_mat[row_num, ] <- c(demand_var, iv, beta, beta_p, first_stage_p, endo_test_p)  
+    
+}
+}
+
+colnames(estimatr_mat) <- c('demand var', 'iv', 'beta', 'beta p val', 'first stage iv test p val', 'endo test p val')
+write.csv(estimatr_mat,file=paste(result_dir, "grid_search_causal_ma_detrend_4w_result_20210305.csv", sep=''), row.names=FALSE)
+
+##### 8 week MA detrend#####
+estimatr_mat <- matrix(NA, 128, 6)
+
+row_num <- 0
+for (demand_i in -7:8) {
+  demand_var <- decorate_demand_name(demand_i)
+  
+  for (iv_i in -4:4) {
+    iv_i <- iv_i + demand_i;
+    if (iv_i > 8 | iv_i < -8) {
+      next
+    }
+    row_num <- row_num + 1;
+    cat("row number = ", row_num, "demand index = ", demand_i, "iv index = ", iv_i, "\n") # print loop
+    # print(row_num, demand_i, iv_i) 
+    iv <- decorate_iv_name(iv_i)
+    
+    formula <- as.formula(paste("perc_abuse ~ ", demand_var, " + province - 1 | province + ", 
+                           " + ",  iv, " -1", sep = ""))
+    reg_res <- iv_robust(formula, data=weekly_data1, clusters=province, diagnostics=TRUE)
+    first_stage_p <- reg_res$diagnostic_first_stage_fstatistic['p.value']
+    endo_test_p <- reg_res$diagnostic_endogeneity_test['p.value']
+    beta <- summary(reg_res)$coefficients[1, 1]
+    beta_p <- summary(reg_res)$coefficients[1, 4]
+    
+    estimatr_mat[row_num, ] <- c(demand_var, iv, beta, beta_p, first_stage_p, endo_test_p)  
+    
+}
+}
+
+colnames(estimatr_mat) <- c('demand var', 'iv', 'beta', 'beta p val', 'first stage iv test p val', 'endo test p val')
+write.csv(estimatr_mat,file=paste(result_dir, "grid_search_causal_ma_detrend_8w_result_20210301.csv", sep=''), row.names=FALSE)
+
+##### 12 week MA detrend#####
+estimatr_mat <- matrix(NA, 128, 6)
+
+row_num <- 0
+for (demand_i in -7:8) {
+  demand_var <- decorate_demand_name(demand_i)
+  
+  for (iv_i in -4:4) {
+    iv_i <- iv_i + demand_i;
+    if (iv_i > 8 | iv_i < -8) {
+      next
+    }
+    row_num <- row_num + 1;
+    cat("row number = ", row_num, "demand index = ", demand_i, "iv index = ", iv_i, "\n") # print loop
+    # print(row_num, demand_i, iv_i) 
+    iv <- decorate_iv_name(iv_i)
+    
+    formula <- as.formula(paste("perc_abuse ~ ", demand_var, " + province - 1 | province + ", 
+                           " + ",  iv, " -1", sep = ""))
+    reg_res <- iv_robust(formula, data=weekly_data2, clusters=province, diagnostics=TRUE)
+    first_stage_p <- reg_res$diagnostic_first_stage_fstatistic['p.value']
+    endo_test_p <- reg_res$diagnostic_endogeneity_test['p.value']
+    beta <- summary(reg_res)$coefficients[1, 1]
+    beta_p <- summary(reg_res)$coefficients[1, 4]
+    
+    estimatr_mat[row_num, ] <- c(demand_var, iv, beta, beta_p, first_stage_p, endo_test_p)  
+    
+}
+}
+
+colnames(estimatr_mat) <- c('demand var', 'iv', 'beta', 'beta p val', 'first stage iv test p val', 'endo test p val')
+write.csv(estimatr_mat,file=paste(result_dir, "grid_search_causal_ma_detrend_12w_result_20210301.csv", sep=''), row.names=FALSE)
+
+##### 8 week MA & std detrend#####
+estimatr_mat <- matrix(NA, 140, 6)
+
+row_num <- 0
+for (demand_i in -7:8) {
+  demand_var <- decorate_demand_name(demand_i)
+  
+  for (iv_i in -4:4) {
+    iv_i <- iv_i + demand_i;
+    if (iv_i > 8 | iv_i < -8) {
+      next
+    }
+    row_num <- row_num + 1;
+    cat("row number = ", row_num, "demand index = ", demand_i, "iv index = ", iv_i, "\n") # print loop
+    # print(row_num, demand_i, iv_i) 
+    iv <- decorate_iv_name(iv_i)
+    
+    formula <- as.formula(paste("perc_abuse ~ ", demand_var, " + province - 1 | province + ", 
+                           " + ",  iv, " -1", sep = ""))
+    reg_res <- iv_robust(formula, data=weekly_data3, clusters=province, diagnostics=TRUE)
+    first_stage_p <- reg_res$diagnostic_first_stage_fstatistic['p.value']
+    endo_test_p <- reg_res$diagnostic_endogeneity_test['p.value']
+    beta <- summary(reg_res)$coefficients[1, 1]
+    beta_p <- summary(reg_res)$coefficients[1, 4]
+    
+    estimatr_mat[row_num, ] <- c(demand_var, iv, beta, beta_p, first_stage_p, endo_test_p)  
+    
+}
+}
+
+colnames(estimatr_mat) <- c('demand var', 'iv', 'beta', 'beta p val', 'first stage iv test p val', 'endo test p val')
+write.csv(estimatr_mat,file=paste(result_dir, "grid_search_causal_ma_detrend_8w_std_result_20210217.csv", sep=''), row.names=FALSE)
+
+
+###### plot residual ######
+
+acf(na.omit(weekly_data0[weekly_data0$province=='Bangkok', 'demand_shock']), lag.max = 10, main='Autocorrelation for Bangkok demand shocks')
+acf(na.omit(weekly_data0[weekly_data0$province=='Bangkok', 'demand_shock']), plot = F, lag.max = 10)
+
+reg_data <- weekly_data0
+demand_var <- "demand_shock_minus_2"
+iv <- "ex_rate_diff_minus_3"
+formula <- as.formula(paste("perc_abuse ~ ", demand_var, " + province - 1 | province + ", 
+                           " + ",  iv, " -1", sep = ""))
+reg_res <- iv_robust(formula, data=reg_data, clusters=province, diagnostics=TRUE)
+not_na_data <- reg_data[(!is.na(reg_data$demand_shock_minus_2)) & (!is.na(reg_data$ex_rate_diff_minus_3)),]
+residual <- not_na_data$perc_abuse - reg_res$fitted.values
+not_na_data$residual = residual
+not_na_data$fitted.values = reg_res$fitted.values
+write.csv(not_na_data,file=paste(result_dir, "residual_over_time_03012021.csv", sep=''), row.names=FALSE)
+
+library(gplots)
+# residual by province
+plotmeans(residual ~ province, main="residual across provinces", data=not_na_data, las = 2, cex.axis = .6, xlab='\n\nprovince')
+
+# residual over time
+plotmeans(residual ~ year_week, main="residual over time", data=not_na_data)
+
+library(ggplot2)
+# fitted_vs_actual_by_prov
+sp<-ggplot(not_na_data, aes(x=fitted.values, y=perc_abuse, color=province)) + geom_point() + ggtitle("Plot of fitted values vs. actual values of percent abuse") +
+  xlab("fitted") + ylab("actual") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+sp
+
+# fitted_vs_residual_by_prov
+sp<-ggplot(not_na_data, aes(x=fitted.values, y=residual, color=province)) + geom_point() + ggtitle("Plot of fitted values vs. residual values of percent abuse") +
+  xlab("fitted") + ylab("residual") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+sp
+
+# actual_vs_residual_by_prov
+sp<-ggplot(not_na_data, aes(x=perc_abuse, y=residual, color=province)) + geom_point() + ggtitle("Plot of actual values vs. residual values of percent abuse") +
+  xlab("actual") + ylab("residual") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+sp
+
+## bangkok
+sp<-ggplot(not_na_data[not_na_data$province=='Bangkok',], aes(x=fitted.values, y=residual, color=province)) + geom_point() + ggtitle("Plot of fitted values vs. residual values of percent abuse for Bangkok") +
+  xlab("fitted") + ylab("residual") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+sp
+
+## Samut_Prakan
+sp<-ggplot(not_na_data[not_na_data$province=='Samut Prakan',], aes(x=fitted.values, y=residual, color=province)) + geom_point() + ggtitle("Plot of fitted values vs. residual values of percent abuse for Samut Prakan") +
+  xlab("fitted") + ylab("residual") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+sp
+
+# fitted_vs_actual_by_time
+sp<-ggplot(not_na_data, aes(x=fitted.values, y=perc_abuse, color=yr_wk_float)) + geom_point() + ggtitle("Plot of fitted values vs. actual values of percent abuse") +
+  xlab("fitted") + ylab("actual") +
+  theme(plot.title = element_text(hjust = 0.5)) + scale_color_gradient(low="blue", high="red")
+sp
+
+# residual by province
+sp<-ggplot(not_na_data, aes(x=year_week, y=residual, color=province)) + geom_point() + ggtitle("Plot of residual values over time by province") +
+  xlab("weeks") + ylab("residual") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+sp
+
+
+
+################# time FE #########################
+###### month FE ######
+estimatr_mat <- matrix(NA, 140, 6)
+
+row_num <- 0
+for (demand_i in -7:8) {
+  demand_var <- decorate_demand_name(demand_i)
+  
+  for (iv_i in -4:4) {
+    iv_i <- iv_i + demand_i;
+    if (iv_i > 8 | iv_i < -8) {
+      next
+    }
+    row_num <- row_num + 1;
+    cat("row number = ", row_num, "demand index = ", demand_i, "iv index = ", iv_i, "\n") # print loop
+    # print(row_num, demand_i, iv_i) 
+    iv <- decorate_iv_name(iv_i)
+    formula <- as.formula(paste("perc_abuse ~ ", demand_var, " + province + month - 1 | province + month + ", iv, " -1", sep = ""))
+    reg_res <- iv_robust(formula, data=weekly_data0, clusters=province, diagnostics=TRUE)
+    first_stage_p <- reg_res$diagnostic_first_stage_fstatistic['p.value']
+    endo_test_p <- reg_res$diagnostic_endogeneity_test['p.value']
+    beta <- summary(reg_res)$coefficients[1, 1]
+    beta_p <- summary(reg_res)$coefficients[1, 4]
+    
+    estimatr_mat[row_num, ] <- c(demand_var, iv, beta, beta_p, first_stage_p, endo_test_p)  
+    
+}
+}
+
+colnames(estimatr_mat) <- c('demand var', 'iv', 'beta', 'beta p val', 'first stage iv test p val', 'endo test p val')
+write.csv(estimatr_mat,file=paste(result_dir, "grid_search_causal_ma_detrend_4w_monthFE_result_20210301.csv", sep=''), row.names=FALSE)
+
+###### quarter FE ###### 
+estimatr_mat <- matrix(NA, 140, 6)
+
+row_num <- 0
+for (demand_i in -7:8) {
+  demand_var <- decorate_demand_name(demand_i)
+  
+  for (iv_i in -4:4) {
+    iv_i <- iv_i + demand_i;
+    if (iv_i > 8 | iv_i < -8) {
+      next
+    }
+    row_num <- row_num + 1;
+    cat("row number = ", row_num, "demand index = ", demand_i, "iv index = ", iv_i, "\n") # print loop
+    # print(row_num, demand_i, iv_i) 
+    iv <- decorate_iv_name(iv_i)
+    formula <- as.formula(paste("perc_abuse ~ ", demand_var, " + province + quarter - 1 | province + quarter + ", iv, " -1", sep = ""))
+    reg_res <- iv_robust(formula, data=weekly_data0, clusters=province, diagnostics=TRUE)
+    first_stage_p <- reg_res$diagnostic_first_stage_fstatistic['p.value']
+    endo_test_p <- reg_res$diagnostic_endogeneity_test['p.value']
+    beta <- summary(reg_res)$coefficients[1, 1]
+    beta_p <- summary(reg_res)$coefficients[1, 4]
+    
+    estimatr_mat[row_num, ] <- c(demand_var, iv, beta, beta_p, first_stage_p, endo_test_p)  
+    
+}
+}
+
+colnames(estimatr_mat) <- c('demand var', 'iv', 'beta', 'beta p val', 'first stage iv test p val', 'endo test p val')
+write.csv(estimatr_mat,file=paste(result_dir, "grid_search_causal_ma_detrend_4w_quarterFE_result_20210301.csv", sep=''), row.names=FALSE)
+
+
+###### week FE ###### 
+estimatr_mat <- matrix(NA, 140, 6)
+
+row_num <- 0
+for (demand_i in -7:8) {
+  demand_var <- decorate_demand_name(demand_i)
+  
+  for (iv_i in -4:4) {
+    iv_i <- iv_i + demand_i;
+    if (iv_i > 8 | iv_i < -8) {
+      next
+    }
+    row_num <- row_num + 1;
+    cat("row number = ", row_num, "demand index = ", demand_i, "iv index = ", iv_i, "\n") # print loop
+    # print(row_num, demand_i, iv_i) 
+    iv <- decorate_iv_name(iv_i)
+    formula <- as.formula(paste("perc_abuse ~ ", demand_var, " + province + year_week - 1 | province + year_week + ", iv, " -1", sep = ""))
+    reg_res <- iv_robust(formula, data=weekly_data0, clusters=province, diagnostics=TRUE)
+    first_stage_p <- reg_res$diagnostic_first_stage_fstatistic['p.value']
+    endo_test_p <- reg_res$diagnostic_endogeneity_test['p.value']
+    beta <- summary(reg_res)$coefficients[1, 1]
+    beta_p <- summary(reg_res)$coefficients[1, 4]
+    
+    estimatr_mat[row_num, ] <- c(demand_var, iv, beta, beta_p, first_stage_p, endo_test_p)  
+    
+}
+}
+
+colnames(estimatr_mat) <- c('demand var', 'iv', 'beta', 'beta p val', 'first stage iv test p val', 'endo test p val')
+write.csv(estimatr_mat,file=paste(result_dir, "grid_search_causal_ma_detrend_4w_weekFE_result_20210301.csv", sep=''), row.names=FALSE)
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
